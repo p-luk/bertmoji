@@ -17,7 +17,9 @@
 
 import logging
 import os
-
+import json
+import sys
+import csv
 from ...file_utils import is_tf_available
 from .utils import DataProcessor, InputExample, InputFeatures
 
@@ -44,23 +46,23 @@ def glue_convert_examples_to_features(
     Loads a data file into a list of ``InputFeatures``
 
     Args:
-        examples: List of ``InputExamples`` or ``tf.data.Dataset`` containing the examples.
-        tokenizer: Instance of a tokenizer that will tokenize the examples
-        max_length: Maximum example length
-        task: GLUE task
-        label_list: List of labels. Can be obtained from the processor using the ``processor.get_labels()`` method
-        output_mode: String indicating the output mode. Either ``regression`` or ``classification``
-        pad_on_left: If set to ``True``, the examples will be padded on the left rather than on the right (default)
-        pad_token: Padding token
-        pad_token_segment_id: The segment ID for the padding token (It is usually 0, but can vary such as for XLNet where it is 4)
-        mask_padding_with_zero: If set to ``True``, the attention mask will be filled by ``1`` for actual values
-            and by ``0`` for padded values. If set to ``False``, inverts it (``1`` for padded values, ``0`` for
-            actual values)
+    examples: List of ``InputExamples`` or ``tf.data.Dataset`` containing the examples.
+    tokenizer: Instance of a tokenizer that will tokenize the examples
+    max_length: Maximum example length
+    task: GLUE task
+    label_list: List of labels. Can be obtained from the processor using the ``processor.get_labels()`` method
+    output_mode: String indicating the output mode. Either ``regression`` or ``classification``
+    pad_on_left: If set to ``True``, the examples will be padded on the left rather than on the right (default)
+    pad_token: Padding token
+    pad_token_segment_id: The segment ID for the padding token (It is usually 0, but can vary such as for XLNet where it is 4)
+    mask_padding_with_zero: If set to ``True``, the attention mask will be filled by ``1`` for actual values
+        and by ``0`` for padded values. If set to ``False``, inverts it (``1`` for padded values, ``0`` for
+        actual values)
 
     Returns:
-        If the ``examples`` input is a ``tf.data.Dataset``, will return a ``tf.data.Dataset``
-        containing the task-specific features. If the input is a list of ``InputExamples``, will return
-        a list of task-specific ``InputFeatures`` which can be fed to the model.
+    If the ``examples`` input is a ``tf.data.Dataset``, will return a ``tf.data.Dataset``
+    containing the task-specific features. If the input is a list of ``InputExamples``, will return
+    a list of task-specific ``InputFeatures`` which can be fed to the model.
 
     """
     is_tf_dataset = False
@@ -90,16 +92,14 @@ def glue_convert_examples_to_features(
         if ex_index % 10000 == 0:
             logger.info("Writing example %d/%d" % (ex_index, len_examples))
 
-        inputs = tokenizer.encode_plus(
-            example.text_a, example.text_b, add_special_tokens=True, max_length=max_length, return_token_type_ids=True,
-        )
+        inputs = tokenizer.encode_plus(example.text_a, example.text_b, add_special_tokens=True, return_token_type_ids=True, max_length=max_length,)
         input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
 
-        # The mask has 1 for real tokens and 0 for padding tokens. Only real
-        # tokens are attended to.
+    # The mask has 1 for real tokens and 0 for padding tokens. Only real
+    # tokens are attended to.
         attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
-        # Zero-pad up to the sequence length.
+    # Zero-pad up to the sequence length.
         padding_length = max_length - len(input_ids)
         if pad_on_left:
             input_ids = ([pad_token] * padding_length) + input_ids
@@ -113,10 +113,10 @@ def glue_convert_examples_to_features(
         assert len(input_ids) == max_length, "Error with input length {} vs {}".format(len(input_ids), max_length)
         assert len(attention_mask) == max_length, "Error with input length {} vs {}".format(
             len(attention_mask), max_length
-        )
+    	)
         assert len(token_type_ids) == max_length, "Error with input length {} vs {}".format(
             len(token_type_ids), max_length
-        )
+	)
 
         if output_mode == "classification":
             label = label_map[example.label]
@@ -136,8 +136,8 @@ def glue_convert_examples_to_features(
         features.append(
             InputFeatures(
                 input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, label=label
-            )
-        )
+        	)
+    	)
 
     if is_tf_available() and is_tf_dataset:
 
@@ -145,9 +145,9 @@ def glue_convert_examples_to_features(
             for ex in features:
                 yield (
                     {
-                        "input_ids": ex.input_ids,
-                        "attention_mask": ex.attention_mask,
-                        "token_type_ids": ex.token_type_ids,
+                         "input_ids": ex.input_ids,
+                         "attention_mask": ex.attention_mask,
+                         "token_type_ids": ex.token_type_ids,
                     },
                     ex.label,
                 )
@@ -517,29 +517,32 @@ class WnliProcessor(DataProcessor):
             examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
-# ----------------------------------------------------------------------------------------------------- #
-class EmojiProcessor(DataProcessor):
-    """Processor for the emoji data set."""
+class BoolqProcessor(DataProcessor):
+    """Processor for the BoolQ data set (SuperGLUE version)."""
 
     def get_example_from_tensor_dict(self, tensor_dict):
         """See base class."""
         return InputExample(
-            tensor_dict["id"].numpy(),
-            tensor_dict["tetxt"].numpy().decode("utf-8"),
+            tensor_dict["idx"].numpy(),
+            tensor_dict["passage"].numpy().decode("utf-8"),
+            tensor_dict["question"].numpy().decode("utf-8"),
             str(tensor_dict["label"].numpy()),
         )
 
     def get_train_examples(self, data_dir):
         """See base class."""
-        return self._create_examples(self._read_tsv(os.path.join(data_dir, "train_bert.tsv")), "train")
+        logger.info("LOOKING AT {}".format(os.path.join(data_dir, "train.jsonl")))
+        with open(os.path.join(data_dir,"train.jsonl"),"r") as f:
+            return self._create_examples(f.read().splitlines(), "train")
 
     def get_dev_examples(self, data_dir):
         """See base class."""
-        return self._create_examples(self._read_tsv(os.path.join(data_dir, "val_bert.tsv")), "dev")
+        with open(os.path.join(data_dir,"val.jsonl"),"r") as f:
+            return self._create_examples(f.read().splitlines(), "val")
 
     def get_labels(self):
         """See base class."""
-        return [':smiling_face_with_smiling_eyes:', ':broken_heart:', ':face_with_tears_of_joy:', ':crying_face:', ':grinning_face_with_sweat:', ':red_heart:',':smiling_face_with_heart-eyes:',':rolling_on_the_floor_laughing:', ':blue_heart:', ':beaming_face_with_smiling_eyes:', ':two_hearts:', ':sparkling_heart:', ':face_blowing_a_kiss:', ':fire:', ':folded_hands:', ':clapping_hands:', ':loudly_crying_face:', ':thinking_face:', ':heart_suit:', ':thumbs_up:']
+        return ["False", "True"]
 
     def _create_examples(self, lines, set_type):
         """Creates examples for the training and dev sets."""
@@ -547,13 +550,55 @@ class EmojiProcessor(DataProcessor):
         for (i, line) in enumerate(lines):
             if i == 0:
                 continue
-            guid = "%s-%s" % (set_type, line[0])
-            text = line[1]
-            label = line[-1]
-            examples.append(InputExample(guid=guid, text=text, label=label))
+            line=json.loads(line)
+            guid = "%s-%s" % (set_type,line["idx"])
+            text_a = line["passage"]
+            text_b = line["question"]
+            label = line["label"]
+            examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=str(label)))
+        return example
+class emojiProcessor(DataProcessor):
+    def get_example_from_tensor_dict(self, tensor_dict):
+        """See base class."""
+        return InputExample(
+            tensor_dict["idx"].numpy(),
+            tensor_dict["passage"].numpy().decode("utf-8"),
+            None,
+            str(tensor_dict["label"].numpy()),
+    )
+
+    def _read_csv(cls, input_file, quotechar=None):
+        with open(input_file, "r") as f:
+            reader = csv.reader(f, quotechar=quotechar)
+            lines = []
+            for line in reader:
+                if sys.version_info[0] == 2:
+                    line = list(unicode(cell, 'utf-8') for cell in line)
+                lines.append(line)
+            return lines
+
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(self._read_csv(os.path.join(data_dir, "train.csv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(self._read_csv(os.path.join(data_dir, "val.csv")), "dev")
+
+    def get_labels(self):
+        """See base class."""
+        return [":smiling_face_with_smiling_eyes:", ":broken_heart:", ":face_with_tears_of_joy:", ":crying_face:", ":grinning_face_with_sweat:", ":red_heart:",":smiling_face_with_heart-eyes:",":rolling_on_the_floor_laughing:", ":blue_heart:", ":beaming_face_with_smiling_eyes:", ":two_hearts:",":sparkling_heart:", ":face_blowing_a_kiss:", ":fire:", ":folded_hands:", ":clapping_hands:", ":loudly_crying_face:", ":thinking_face:", ":heart_suit:", ":thumbs_up:"]
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            if i == 0:
+                continue
+            guid = "%s-%s" % (set_type, i)
+            text_a = line[1]
+            label =line[0]
+            examples.append(InputExample(guid=guid, text_a=text_a, text_b=None, label=str(label)))
         return examples
-# ----------------------------------------------------------------------------------------------------- #
-    
 
 glue_tasks_num_labels = {
     "cola": 2,
@@ -565,10 +610,9 @@ glue_tasks_num_labels = {
     "qnli": 2,
     "rte": 2,
     "wnli": 2,
-    # ----------------------------------------------------------------------------------------------------- #
-    "emoji":20,
-    # ----------------------------------------------------------------------------------------------------- #
-}
+    "boolq": 2,
+    "emoji": 20,
+    }
 
 glue_processors = {
     "cola": ColaProcessor,
@@ -581,9 +625,8 @@ glue_processors = {
     "qnli": QnliProcessor,
     "rte": RteProcessor,
     "wnli": WnliProcessor,
-    # ----------------------------------------------------------------------------------------------------- #
-    "emoji": EmojiProcessor, 
-    # ----------------------------------------------------------------------------------------------------- #
+    "boolq":BoolqProcessor,
+    "emoji":emojiProcessor,
 }
 
 glue_output_modes = {
@@ -597,8 +640,6 @@ glue_output_modes = {
     "qnli": "classification",
     "rte": "classification",
     "wnli": "classification",
-    # ----------------------------------------------------------------------------------------------------- #
-    "emoji": "classification",
-    # ----------------------------------------------------------------------------------------------------- #
-
+    "boolq":"classification",
+    "emoji":"classification"
 }
