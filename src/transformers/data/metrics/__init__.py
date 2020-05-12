@@ -17,7 +17,7 @@
 try:
     from scipy.stats import pearsonr, spearmanr
     from sklearn.metrics import matthews_corrcoef, f1_score
-
+    from sklearn.metrics import precision_recall_fscore_support
     _has_sklearn = True
 except (AttributeError, ImportError):
     _has_sklearn = False
@@ -34,13 +34,16 @@ if _has_sklearn:
 
     def acc_and_f1(preds, labels):
         acc = simple_accuracy(preds, labels)
-        f1 = f1_score(y_true=labels, y_pred=preds)
+        f1 = f1_score(y_true=labels, y_pred=preds,average="micro")
+        precision=precision_recall_fscore_support(y_true=labels, y_pred=preds, average='micro')[0]
+        recall=precision_recall_fscore_support(y_true=labels, y_pred=preds, average='micro')[1]
         return {
             "acc": acc,
             "f1": f1,
+            "precision": precision,
+            "recall": recall,
             "acc_and_f1": (acc + f1) / 2,
         }
-
     def pearson_and_spearman(preds, labels):
         pearson_corr = pearsonr(preds, labels)[0]
         spearman_corr = spearmanr(preds, labels)[0]
@@ -74,10 +77,10 @@ if _has_sklearn:
             return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "hans":
             return {"acc": simple_accuracy(preds, labels)}
-        # ----------------------------------------------------------------------------------------------------- #
+        elif task_name == "boolq":
+            return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "emoji":
             return acc_and_f1(preds, labels)
-        # ----------------------------------------------------------------------------------------------------- #
         else:
             raise KeyError(task_name)
 
