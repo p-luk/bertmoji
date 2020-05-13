@@ -17,6 +17,7 @@
 try:
     from scipy.stats import pearsonr, spearmanr
     from sklearn.metrics import matthews_corrcoef, f1_score
+    from sklearn.metrics import classification_report
     from sklearn.metrics import precision_recall_fscore_support
     _has_sklearn = True
 except (AttributeError, ImportError):
@@ -44,6 +45,12 @@ if _has_sklearn:
             "recall": recall,
             "acc_and_f1": (acc + f1) / 2,
         }
+    def report(preds,labels):
+        reports=classification_report(y_true=labels, y_pred=preds, digits = 3)
+        return {"report": reports
+        }
+
+
     def pearson_and_spearman(preds, labels):
         pearson_corr = pearsonr(preds, labels)[0]
         spearman_corr = spearmanr(preds, labels)[0]
@@ -80,7 +87,7 @@ if _has_sklearn:
         elif task_name == "boolq":
             return {"acc": simple_accuracy(preds, labels)}
         elif task_name == "emoji":
-            return acc_and_f1(preds, labels)
+            return report(preds, labels) #report(preds,labels)
         else:
             raise KeyError(task_name)
 
